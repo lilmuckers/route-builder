@@ -2,7 +2,7 @@
 
 GPS route tracking PWA. Records, replays, and analyses drives. Overlays Citroën fuel efficiency data onto routes.
 
-**Live:** https://pages.patrick-mckinley.com
+**Live:** https://paths.patrick-mckinley.com
 
 ## Features
 
