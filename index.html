@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PathTracer">
+  <title>Path Tracer</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- Top bar -->
+<div id="top-bar">
+  <div id="app-title">Path Tracer</div>
+  <div id="rec-indicator">
+    <div id="rec-dot"></div>
+    <span>REC</span>
+  </div>
+  <button class="icon-btn" id="btn-settings" aria-label="Settings">⚙</button>
+</div>
+
+<!-- Live stats (shown during tracking) -->
+<div id="live-stats">
+  <div class="live-stat">
+    <span class="live-stat-label">Speed</span>
+    <span class="live-stat-val" id="live-speed">—</span>
+  </div>
+  <div class="live-stat">
+    <span class="live-stat-label">Distance</span>
+    <span class="live-stat-val" id="live-dist">—</span>
+  </div>
+  <div class="live-stat">
+    <span class="live-stat-label">Time</span>
+    <span class="live-stat-val" id="live-dur">—</span>
+  </div>
+  <div class="live-stat">
+    <span class="live-stat-label">Altitude</span>
+    <span class="live-stat-val" id="live-alt">—</span>
+  </div>
+  <div class="live-stat">
+    <span class="live-stat-label">Accuracy</span>
+    <span class="live-stat-val" id="live-acc">—</span>
+  </div>
+</div>
+
+<!-- Floating action button -->
+<button id="fab" aria-label="Start tracking">▶</button>
+
+<!-- Bottom sheet -->
+<div id="bottom-sheet">
+  <div id="sheet-handle-area">
+    <div id="sheet-handle"></div>
+    <div id="sheet-tabs">
+      <button class="sheet-tab active" data-tab="routes">Routes</button>
+      <button class="sheet-tab" data-tab="stats">Stats</button>
+      <button class="sheet-tab" data-tab="live">Live</button>
+    </div>
+  </div>
+
+  <div id="sheet-content">
+    <!-- Routes panel -->
+    <div class="tab-panel" data-panel="routes">
+      <div id="routes-list"></div>
+    </div>
+
+    <!-- Stats panel -->
+    <div class="tab-panel" data-panel="stats" style="display:none">
+      <div id="stats-panel">
+        <div class="empty-state">
+          <div class="empty-state-icon">📊</div>
+          <p>Select a route to see statistics.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live panel -->
+    <div class="tab-panel" data-panel="live" style="display:none">
+      <div class="empty-state" id="live-panel-idle">
+        <div class="empty-state-icon">📡</div>
+        <p>Start tracking to see live data.</p>
+      </div>
+      <div id="live-panel-active" style="display:none">
+        <div class="stats-grid" id="live-grid">
+          <div class="stat-card">
+            <div class="stat-card-label">Speed</div>
+            <div class="stat-card-val" id="live2-speed">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Distance</div>
+            <div class="stat-card-val" id="live2-dist">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Duration</div>
+            <div class="stat-card-val" id="live2-dur">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Altitude</div>
+            <div class="stat-card-val" id="live2-alt">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Heading</div>
+            <div class="stat-card-val" id="live2-hdg">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">GPS Accuracy</div>
+            <div class="stat-card-val" id="live2-acc">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Points</div>
+            <div class="stat-card-val" id="live2-pts">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Max Speed</div>
+            <div class="stat-card-val" id="live2-maxspd">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal overlay -->
+<div id="modal-overlay">
+  <div id="modal" style="position:relative">
+    <h2 id="modal-title"></h2>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
