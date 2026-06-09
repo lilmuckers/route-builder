@@ -17,7 +17,7 @@ const state = {
   sheetState: 'peek', // 'collapsed' | 'peek' | 'expanded'
 };
 
-let mapMgr, tracker, replay;
+let mapMgr, tracker, replay, wakeLock;
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -150,6 +150,7 @@ function startTracking() {
   });
 
   tracker.start();
+  acquireWakeLock();
 }
 
 async function stopTracking() {
@@ -163,6 +164,7 @@ async function stopTracking() {
   document.getElementById('live-stats').classList.remove('active');
   document.getElementById('live-panel-idle').style.display = '';
   document.getElementById('live-panel-active').style.display = 'none';
+  releaseWakeLock();
 
   if (points.length < 2) {
     toast('Too few points recorded.');
@@ -604,6 +606,33 @@ function geoErrMsg(err) {
   };
   return msgs[err.code] ?? 'Location error.';
 }
+
+// ─── Wake Lock ────────────────────────────────────────────────────────────────
+
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    document.getElementById('wakelock-indicator').classList.add('active');
+    wakeLock.addEventListener('release', () => {
+      wakeLock = null;
+      document.getElementById('wakelock-indicator').classList.remove('active');
+    });
+  } catch (e) {
+    // permission denied or not supported — silent, tracking still works
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+
+// Re-acquire after a phone call or brief interruption returns the page to foreground
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.tracking && !wakeLock) {
+    acquireWakeLock();
+  }
+});
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 

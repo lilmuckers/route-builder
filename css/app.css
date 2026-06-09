@@ -83,6 +83,13 @@ html, body {
   font-weight: 600;
 }
 #rec-indicator.active { display: flex; }
+
+#wakelock-indicator {
+  display: none;
+  font-size: 16px;
+  opacity: 0.85;
+}
+#wakelock-indicator.active { display: block; }
 #rec-dot {
   width: 8px; height: 8px;
   background: var(--red);
