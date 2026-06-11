@@ -1,10 +1,11 @@
 import { MapManager } from './map/index.js';
 import { Tracker } from './tracker.js';
 import { Replay } from './replay.js';
-import { calcStats, fmtDistance, fmtSpeed, fmtDuration, fmtAlt } from './stats.js';
+import { calcStats, fmtDistance, fmtSpeed, fmtDuration, fmtAlt, fmtTime, pointSpeedKmh, buildColoredSegments } from './stats.js';
 import { saveRoute, getRoute, getAllRoutes, deleteRoute, getSetting, setSetting } from './storage.js';
 import { exportJSON, exportGist } from './export.js';
 import { parseFuelCSV, matchFuelToRoute, buildEfficiencySegments } from './fuel.js';
+import { fetchSpeedLimits, matchSpeedLimits } from './speedlimits.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,7 @@ const state = {
   routes: [],
   activeTab: 'routes',
   sheetState: 'peek', // 'collapsed' | 'peek' | 'expanded'
+  mapView: 'plain', // 'plain' | 'absolute' | 'relative' | 'pace'
 };
 
 let mapMgr, tracker, replay, wakeLock;
@@ -92,10 +94,10 @@ function renderRoutesList() {
 async function selectRoute(id) {
   const route = await getRoute(id);
   state.selectedRoute = route;
+  state.mapView = 'plain';
   setTab('stats');
-  renderStatsPanel();
   mapMgr.clearAll();
-  mapMgr.drawTrack(route.points);
+  renderMapView(route);
   mapMgr.fitRoute(route.points);
   mapMgr.setFollowUser(false);
 
@@ -104,8 +106,20 @@ async function selectRoute(id) {
     mapMgr.drawFuelSegments(segments);
   }
 
+  renderStatsPanel();
   setSheetState('peek');
   renderRoutesList();
+}
+
+function renderMapView(route) {
+  mapMgr.clearTrack('track');
+  mapMgr.clearTrack('track-colored');
+  if (state.mapView === 'plain') {
+    mapMgr.drawTrack(route.points, 'track');
+  } else {
+    const segments = buildColoredSegments(route.points, state.mapView);
+    mapMgr.drawColoredSegments(segments, 'track-colored', seg => showPointDetails(seg, route));
+  }
 }
 
 // ─── Tracking ─────────────────────────────────────────────────────────────────
@@ -270,6 +284,19 @@ function renderStatsPanel() {
       </div>
     </div>
 
+    <div class="divider"></div>
+    <div class="section-title">Map View</div>
+    <div class="view-btns">
+      ${[
+        ['plain', 'Plain'],
+        ['absolute', 'Speed'],
+        ['relative', 'vs Limit'],
+        ['pace', 'Traffic'],
+      ].map(([key, label]) => `<button class="view-btn${state.mapView === key ? ' active' : ''}" data-view="${key}">${label}</button>`).join('')}
+    </div>
+    ${renderViewLegend(state.mapView)}
+    ${!route.points.some(p => p.speedLimitKmh != null) ? '<button class="btn btn-ghost btn-sm" id="btn-fetch-limits">📍 Fetch Speed Limits</button>' : `<div style="font-size:12px;color:var(--text2)">Speed limits: ${route.points.filter(p=>p.speedLimitKmh!=null).length}/${route.points.length} points matched. <button class="btn btn-ghost btn-sm" id="btn-fetch-limits">↻ Refetch</button></div>`}
+
     <div id="replay-controls" class="replay-controls-hidden">
       <div class="replay-header">Replay</div>
       <div class="replay-row">
@@ -299,6 +326,41 @@ function renderStatsPanel() {
   `;
 
   setupStatsActions(route, stats);
+}
+
+function renderViewLegend(mode) {
+  const bars = {
+    plain: null,
+    absolute: { stops: ['hsl(240,85%,50%)', 'hsl(0,85%,50%)'], left: 'Slow', right: 'Fast' },
+    relative: { stops: ['hsl(240,85%,50%)', 'hsl(120,85%,50%)', 'hsl(0,85%,50%)'], left: 'Under limit', right: 'Over limit' },
+    pace: { stops: ['hsl(0,85%,50%)', 'hsl(120,85%,50%)'], left: 'Slow (traffic)', right: 'Fast' },
+  };
+  const bar = bars[mode];
+  if (!bar) return '';
+  return `<div class="view-legend">
+    <div class="view-legend-bar" style="background:linear-gradient(to right,${bar.stops.join(',')})"></div>
+    <div class="view-legend-labels"><span>${bar.left}</span><span>${bar.right}</span></div>
+  </div>`;
+}
+
+function showPointDetails(seg, route) {
+  const p = seg.point;
+  const idx = route.points.indexOf(p);
+  const elapsedS = (p.gpsTimestamp - route.points[0].gpsTimestamp) / 1000;
+  const speedKmh = seg.speedKmh ?? pointSpeedKmh(route.points, idx);
+
+  openModal('Point Details', `
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-card-label">Time</div><div class="stat-card-val">${fmtTime(p.gpsTimestamp)}</div></div>
+      <div class="stat-card"><div class="stat-card-label">Elapsed</div><div class="stat-card-val">${fmtDuration(elapsedS)}</div></div>
+      <div class="stat-card"><div class="stat-card-label">Speed</div><div class="stat-card-val">${fmtSpeed(speedKmh / 3.6)}</div></div>
+      <div class="stat-card"><div class="stat-card-label">Speed Limit</div><div class="stat-card-val">${p.speedLimitKmh != null ? Math.round(p.speedLimitKmh) + ' km/h' : 'unknown'}</div></div>
+      <div class="stat-card"><div class="stat-card-label">Altitude</div><div class="stat-card-val">${fmtAlt(p.altitude)}</div></div>
+      <div class="stat-card"><div class="stat-card-label">Accuracy</div><div class="stat-card-val">${p.accuracy != null ? '±' + Math.round(p.accuracy) + 'm' : 'n/a'}</div></div>
+      <div class="stat-card"><div class="stat-card-label">Heading</div><div class="stat-card-val">${p.heading != null ? Math.round(p.heading) + '°' : 'n/a'}</div></div>
+      ${seg.chunkDistance != null ? `<div class="stat-card"><div class="stat-card-label">Min. Distance</div><div class="stat-card-val">${fmtDistance(seg.chunkDistance)}</div></div>` : ''}
+    </div>
+  `);
 }
 
 function renderFuelSection(route) {
@@ -359,6 +421,32 @@ function setupStatsActions(route, stats) {
       btn.classList.add('active');
       if (replay) replay.setSpeed(Number(btn.dataset.speed));
     });
+  });
+
+  document.querySelectorAll('.view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.mapView = btn.dataset.view;
+      if (state.mapView === 'relative' && !route.points.some(p => p.speedLimitKmh != null)) {
+        toast('Fetch speed limits to use this view.');
+      }
+      renderStatsPanel();
+      renderMapView(route);
+    });
+  });
+
+  document.getElementById('btn-fetch-limits')?.addEventListener('click', async () => {
+    toast('Fetching speed limits…');
+    try {
+      const ways = await fetchSpeedLimits(route.points);
+      matchSpeedLimits(route.points, ways);
+      await saveRoute(route);
+      const matched = route.points.filter(p => p.speedLimitKmh != null).length;
+      toast(`${matched}/${route.points.length} points matched.`);
+      renderStatsPanel();
+      renderMapView(route);
+    } catch (e) {
+      toast('Speed limit fetch failed: ' + e.message);
+    }
   });
 }
 

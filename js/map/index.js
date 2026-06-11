@@ -41,9 +41,27 @@ export class MapManager {
 
   clearTrack(id = 'track') {
     if (this._layers.has(id)) {
-      this.provider.removeLayer(this._layers.get(id));
+      const layer = this._layers.get(id);
+      if (Array.isArray(layer)) layer.forEach(l => this.provider.removeLayer(l));
+      else this.provider.removeLayer(layer);
       this._layers.delete(id);
     }
+  }
+
+  /**
+   * Draw a route as multiple coloured segments. `segments` is an array of
+   * { points: [a,b], color, ...meta }. `onClick(seg)` fires when a segment
+   * is tapped.
+   */
+  drawColoredSegments(segments, id = 'track', onClick) {
+    this.clearTrack(id);
+    const layers = segments.map(seg => {
+      const layer = this.provider.addPolyline(seg.points, { color: seg.color, weight: 5, opacity: 0.9 });
+      if (onClick) this.provider.onLayerClick(layer, () => onClick(seg));
+      return layer;
+    });
+    this._layers.set(id, layers);
+    return layers;
   }
 
   drawFuelSegments(segments) {
@@ -88,7 +106,10 @@ export class MapManager {
   }
 
   clearAll() {
-    this._layers.forEach(l => this.provider.removeLayer(l));
+    this._layers.forEach(l => {
+      if (Array.isArray(l)) l.forEach(x => this.provider.removeLayer(x));
+      else this.provider.removeLayer(l);
+    });
     this._layers.clear();
     this.clearFuelSegments();
     this.clearReplayMarker();

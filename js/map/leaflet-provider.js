@@ -82,6 +82,13 @@ export class LeafletProvider {
     marker.setLatLng([lat, lng]);
   }
 
+  onLayerClick(layer, cb) {
+    layer.on('click', e => {
+      L.DomEvent.stopPropagation(e);
+      cb(e.latlng);
+    });
+  }
+
   bindTooltip(layer, text) {
     layer.bindTooltip(text.replace('\n', '<br>'), { sticky: true });
   }

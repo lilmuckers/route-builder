@@ -15,6 +15,7 @@ interface GeoPoint {
   speed:            number | null;  // m/s ground speed
   gpsTimestamp:     number;   // ms since epoch, from GeolocationPosition.timestamp
   deviceTimestamp:  number;   // ms since epoch, from Date.now() at point receipt
+  speedLimitKmh?:   number | null;  // matched OSM maxspeed, km/h (see Speed Limits)
 }
 ```
 
@@ -114,6 +115,54 @@ color = hsl(hue, 90%, 50%)
 
 Derived fields also computed per trip:
 - `litersUsed = (distanceMi / mpg) × 4.54609`
+
+## Speed Limits
+
+`js/speedlimits.js`. On demand (per route), queries the Overpass API for OSM
+`highway` ways tagged with `maxspeed` within the route's bounding box (+0.003°
+padding):
+
+```
+[out:json][timeout:30];
+way["highway"]["maxspeed"](south,west,north,east);
+out geom;
+```
+
+`maxspeed` values are parsed to km/h (`"30 mph"` → `48.28`, `"50"` → `50`).
+Unparseable values (e.g. `"national"`) are dropped.
+
+### Matching
+
+Each route point is matched to the nearest way segment via a ~150m grid
+spatial index (`GRID_DEG = 0.0015`), checking the point's cell and its 8
+neighbours. If the nearest segment is within `MATCH_THRESHOLD_M = 30`, its
+`maxspeedKmh` is written to `point.speedLimitKmh`; otherwise `null`.
+
+Results are persisted on the route (mutates `points[]` in place, then
+`saveRoute`), so the Overpass query only needs to run once per route.
+
+## Map Colour Views
+
+`js/stats.js` → `buildColoredSegments(points, mode)` returns
+`{ points: [a,b], color, point, speedKmh, chunkDistance? }[]`, rendered via
+`MapManager.drawColoredSegments`. Each segment is independently clickable.
+
+| Mode       | Colour rule |
+|------------|-------------|
+| `plain`    | Single blue polyline (no segmentation) |
+| `absolute` | Per-point speed normalised to the route's min/max, hue 240° (blue, slowest) → 0° (red, fastest) |
+| `relative` | `diff = speed − speedLimitKmh`. `diff ≤ −5`: blue→green (hue 240°→120°, scaled over −25..−5). `−5 < diff ≤ 5`: green (hue 120°). `diff > 5`: green→red (hue 120°→0°, scaled over 5..35). No limit data: grey (`hsl(0,0%,55%)`) |
+| `pace`     | Points grouped into 60s chunks by `gpsTimestamp`. Each chunk's total distance normalised to the route's min/max chunk distance, hue 0° (red, least distance = traffic) → 120° (green, most distance) |
+
+Speed used is `pointSpeedKmh()`: device-reported `point.speed` if present,
+else haversine distance / time delta from the previous point.
+
+## Point Details
+
+Clicking any segment in a non-`plain` view opens a modal showing: GPS time,
+elapsed time since route start, speed, matched speed limit (or "unknown"),
+altitude, accuracy, heading, and (in `pace` mode) the distance covered in
+that point's 60s chunk.
 
 ## Map Provider Interface
 
