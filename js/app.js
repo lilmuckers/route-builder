@@ -6,6 +6,7 @@ import { saveRoute, getRoute, getAllRoutes, deleteRoute, getSetting, setSetting 
 import { exportJSON, exportGist } from './export.js';
 import { parseFuelCSV, matchFuelToRoute, buildEfficiencySegments } from './fuel.js';
 import { fetchSpeedLimits, matchSpeedLimits } from './speedlimits.js';
+import { View3D } from './view3d.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -17,9 +18,11 @@ const state = {
   activeTab: 'routes',
   sheetState: 'peek', // 'collapsed' | 'peek' | 'expanded'
   mapView: 'plain', // 'plain' | 'absolute' | 'relative' | 'pace'
+  viewMode: '2d', // '2d' | '3d'
+  heightMultiplier: 1,
 };
 
-let mapMgr, tracker, replay, wakeLock;
+let mapMgr, tracker, replay, wakeLock, view3d;
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -95,6 +98,7 @@ async function selectRoute(id) {
   const route = await getRoute(id);
   state.selectedRoute = route;
   state.mapView = 'plain';
+  if (state.viewMode === '3d') exit3D();
   setTab('stats');
   mapMgr.clearAll();
   renderMapView(route);
@@ -112,6 +116,10 @@ async function selectRoute(id) {
 }
 
 function renderMapView(route) {
+  if (state.viewMode === '3d') {
+    enter3D(route);
+    return;
+  }
   mapMgr.clearTrack('track');
   mapMgr.clearTrack('track-colored');
   if (state.mapView === 'plain') {
@@ -120,6 +128,28 @@ function renderMapView(route) {
     const segments = buildColoredSegments(route.points, state.mapView);
     mapMgr.drawColoredSegments(segments, 'track-colored', seg => showPointDetails(seg, route));
   }
+}
+
+function enter3D(route) {
+  document.getElementById('map').style.display = 'none';
+  const el = document.getElementById('view3d');
+  el.style.display = 'block';
+
+  if (!view3d) {
+    view3d = new View3D('view3d');
+    view3d.init();
+  }
+
+  const colorMode = state.mapView === 'plain' ? 'absolute' : state.mapView;
+  const segments = buildColoredSegments(route.points, colorMode);
+  view3d.heightMultiplier = state.heightMultiplier;
+  view3d.setRoute(segments, route.points);
+}
+
+function exit3D() {
+  document.getElementById('view3d').style.display = 'none';
+  document.getElementById('map').style.display = '';
+  if (view3d) { view3d.dispose(); view3d = null; }
 }
 
 // ─── Tracking ─────────────────────────────────────────────────────────────────
@@ -287,6 +317,10 @@ function renderStatsPanel() {
     <div class="divider"></div>
     <div class="section-title">Map View</div>
     <div class="view-btns">
+      <button class="view-btn view2d3d-btn${state.viewMode === '2d' ? ' active' : ''}" data-vm="2d">🗺 2D Map</button>
+      <button class="view-btn view2d3d-btn${state.viewMode === '3d' ? ' active' : ''}" data-vm="3d">⛰ 3D Terrain</button>
+    </div>
+    <div class="view-btns">
       ${[
         ['plain', 'Plain'],
         ['absolute', 'Speed'],
@@ -296,6 +330,14 @@ function renderStatsPanel() {
     </div>
     ${renderViewLegend(state.mapView)}
     ${!route.points.some(p => p.speedLimitKmh != null) ? '<button class="btn btn-ghost btn-sm" id="btn-fetch-limits">📍 Fetch Speed Limits</button>' : `<div style="font-size:12px;color:var(--text2)">Speed limits: ${route.points.filter(p=>p.speedLimitKmh!=null).length}/${route.points.length} points matched. <button class="btn btn-ghost btn-sm" id="btn-fetch-limits">↻ Refetch</button></div>`}
+
+    ${state.viewMode === '3d' ? `
+    <div class="section-title" style="margin-top:14px">Height Exaggeration</div>
+    <div class="view-btns">
+      ${[1, 2, 5, 10, 20, 50].map(m => `<button class="view-btn hmult-btn${state.heightMultiplier === m ? ' active' : ''}" data-mult="${m}">${m}×</button>`).join('')}
+    </div>
+    <p style="font-size:11px;color:var(--text2);margin-bottom:10px">Drag to rotate, scroll/pinch to zoom.</p>
+    ` : ''}
 
     <div id="replay-controls" class="replay-controls-hidden">
       <div class="replay-header">Replay</div>
@@ -423,7 +465,7 @@ function setupStatsActions(route, stats) {
     });
   });
 
-  document.querySelectorAll('.view-btn').forEach(btn => {
+  document.querySelectorAll('.view-btn[data-view]').forEach(btn => {
     btn.addEventListener('click', () => {
       state.mapView = btn.dataset.view;
       if (state.mapView === 'relative' && !route.points.some(p => p.speedLimitKmh != null)) {
@@ -431,6 +473,25 @@ function setupStatsActions(route, stats) {
       }
       renderStatsPanel();
       renderMapView(route);
+    });
+  });
+
+  document.querySelectorAll('.view2d3d-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.vm;
+      if (mode === state.viewMode) return;
+      state.viewMode = mode;
+      if (mode === '2d') exit3D();
+      renderStatsPanel();
+      renderMapView(route);
+    });
+  });
+
+  document.querySelectorAll('.hmult-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.heightMultiplier = Number(btn.dataset.mult);
+      document.querySelectorAll('.hmult-btn').forEach(b => b.classList.toggle('active', b === btn));
+      view3d?.setHeightMultiplier(state.heightMultiplier);
     });
   });
 

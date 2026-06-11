@@ -1,4 +1,4 @@
-const CACHE = 'path-tracer-v2';
+const CACHE = 'path-tracer-v3';
 const PRECACHE = [
   '/',
   '/index.html',
@@ -12,8 +12,12 @@ const PRECACHE = [
   '/js/fuel.js',
   '/js/map/index.js',
   '/js/map/leaflet-provider.js',
+  '/js/speedlimits.js',
+  '/js/view3d.js',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+  'https://unpkg.com/three@0.128.0/build/three.min.js',
+  'https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js',
 ];
 
 self.addEventListener('install', e => {

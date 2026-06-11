@@ -164,6 +164,30 @@ elapsed time since route start, speed, matched speed limit (or "unknown"),
 altitude, accuracy, heading, and (in `pace` mode) the distance covered in
 that point's 60s chunk.
 
+## 3D Terrain View
+
+Selectable alongside the 2D map via "2D Map" / "3D Terrain" buttons. In 3D
+mode the Leaflet map (`#map`) is hidden and a Three.js scene (`#view3d`,
+`js/view3d.js`) renders the route as a coloured line in space:
+
+- **Projection**: equirectangular local-meters, anchored at the route's first
+  point. `x = (lng - lng0) * cos(lat0) * 111320`, `z = -(lat - lat0) * 111320`.
+- **Height**: `y = (altitude - minAltitude) * heightMultiplier`, so the lowest
+  point of the route sits on the ground plane.
+- **Colour**: reuses the same segment colouring as the 2D "Map View" mode
+  (`plain` maps to `absolute` speed colouring in 3D, since a flat colour line
+  in 3D has no value); rendered as a vertex-coloured `THREE.LineSegments`.
+- **Height Exaggeration**: buttons for 1×, 2×, 5×, 10×, 20×, 50× rebuild the
+  route geometry with the new multiplier (camera is not refit on multiplier
+  change, only on initial load/route switch).
+- **Navigation**: `OrbitControls` (drag to rotate, scroll/pinch to zoom,
+  damped). Camera auto-frames the route on first load based on its bounding
+  box footprint.
+- A `THREE.GridHelper` ground plane is drawn under the route for spatial
+  reference.
+- Switching back to "2D Map" disposes the Three.js renderer/scene and
+  restores the Leaflet map.
+
 ## Map Provider Interface
 
 `MapManager` (`js/map/index.js`) delegates all rendering to a provider. To add Google Maps or Mapbox, create a class implementing:
