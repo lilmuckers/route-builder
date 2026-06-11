@@ -555,6 +555,10 @@ function setupSettingsModal() {
         <input type="password" id="setting-gh-token" value="${escHtml(token)}" placeholder="ghp_…" autocomplete="off">
       </div>
       <button class="btn btn-primary" id="btn-settings-save">Save</button>
+
+      <div class="divider"></div>
+      <div class="section-title">App</div>
+      <button class="btn btn-danger" id="btn-clear-cache">⟳ Clear Cache & Reload</button>
     `);
 
     document.getElementById('btn-settings-save').addEventListener('click', async () => {
@@ -563,7 +567,21 @@ function setupSettingsModal() {
       closeModal();
       toast('Settings saved.');
     });
+
+    document.getElementById('btn-clear-cache').addEventListener('click', clearCacheAndReload);
   });
+}
+
+async function clearCacheAndReload() {
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+  }
+  if ('caches' in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  }
+  location.reload(true);
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
