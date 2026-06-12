@@ -21,6 +21,9 @@ export function calcStats(points) {
   let minAlt = null;
   let maxAlt = null;
   let maxSpeed = 0;
+  let minAltIndex = null;
+  let maxAltIndex = null;
+  let maxSpeedIndex = null;
   const speeds = [];
 
   for (let i = 1; i < points.length; i++) {
@@ -36,15 +39,15 @@ export function calcStats(points) {
     }
 
     if (cur.altitude != null) {
-      if (minAlt === null || cur.altitude < minAlt) minAlt = cur.altitude;
-      if (maxAlt === null || cur.altitude > maxAlt) maxAlt = cur.altitude;
+      if (minAlt === null || cur.altitude < minAlt) { minAlt = cur.altitude; minAltIndex = i; }
+      if (maxAlt === null || cur.altitude > maxAlt) { maxAlt = cur.altitude; maxAltIndex = i; }
     }
 
     const dtS = (cur.gpsTimestamp - prev.gpsTimestamp) / 1000;
     const segDist = haversine(prev, cur);
     const segSpeed = dtS > 0 ? segDist / dtS : 0;
     speeds.push(segSpeed);
-    if (segSpeed > maxSpeed) maxSpeed = segSpeed;
+    if (segSpeed > maxSpeed) { maxSpeed = segSpeed; maxSpeedIndex = i; }
   }
 
   const first = points[0];
@@ -61,6 +64,9 @@ export function calcStats(points) {
     elevLoss,
     minAlt,
     maxAlt,
+    minAltIndex,
+    maxAltIndex,
+    maxSpeedIndex,
     pointCount: points.length,
     speeds,
   };

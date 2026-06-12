@@ -292,7 +292,7 @@ function renderStatsPanel() {
         <div class="stat-card-label">Avg Speed</div>
         <div class="stat-card-val">${fmtSpeed(stats.avgSpeed)}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card${stats.maxSpeedIndex != null ? ' stat-card-link' : ''}"${stats.maxSpeedIndex != null ? ` data-jump="${stats.maxSpeedIndex}"` : ''}>
         <div class="stat-card-label">Max Speed</div>
         <div class="stat-card-val">${fmtSpeed(stats.maxSpeed)}</div>
       </div>
@@ -304,11 +304,11 @@ function renderStatsPanel() {
         <div class="stat-card-label">Elev Loss</div>
         <div class="stat-card-val">${fmtAlt(stats.elevLoss)}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card${stats.minAltIndex != null ? ' stat-card-link' : ''}"${stats.minAltIndex != null ? ` data-jump="${stats.minAltIndex}"` : ''}>
         <div class="stat-card-label">Min Alt</div>
         <div class="stat-card-val">${fmtAlt(stats.minAlt)}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card${stats.maxAltIndex != null ? ' stat-card-link' : ''}"${stats.maxAltIndex != null ? ` data-jump="${stats.maxAltIndex}"` : ''}>
         <div class="stat-card-label">Max Alt</div>
         <div class="stat-card-val">${fmtAlt(stats.maxAlt)}</div>
       </div>
@@ -383,6 +383,17 @@ function renderViewLegend(mode) {
     <div class="view-legend-bar" style="background:linear-gradient(to right,${bar.stops.join(',')})"></div>
     <div class="view-legend-labels"><span>${bar.left}</span><span>${bar.right}</span></div>
   </div>`;
+}
+
+function jumpToPoint(route, idx) {
+  const p = route.points[idx];
+  if (state.viewMode === '3d') {
+    state.viewMode = '2d';
+    exit3D();
+  }
+  mapMgr.setFollowUser(false);
+  mapMgr.setReplayMarker(p.lat, p.lng);
+  showPointDetails({ point: p, speedKmh: pointSpeedKmh(route.points, idx) }, route);
 }
 
 function showPointDetails(seg, route) {
@@ -463,6 +474,10 @@ function setupStatsActions(route, stats) {
       btn.classList.add('active');
       if (replay) replay.setSpeed(Number(btn.dataset.speed));
     });
+  });
+
+  document.querySelectorAll('.stat-card-link').forEach(card => {
+    card.addEventListener('click', () => jumpToPoint(route, Number(card.dataset.jump)));
   });
 
   document.querySelectorAll('.view-btn[data-view]').forEach(btn => {
