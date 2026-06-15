@@ -1,4 +1,4 @@
-const CACHE = 'path-tracer-v4';
+const CACHE = 'path-tracer-v5';
 const PRECACHE = [
   '/',
   '/index.html',
@@ -14,6 +14,7 @@ const PRECACHE = [
   '/js/map/leaflet-provider.js',
   '/js/speedlimits.js',
   '/js/view3d.js',
+  '/js/motion.js',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/three@0.128.0/build/three.min.js',

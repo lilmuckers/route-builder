@@ -24,6 +24,12 @@ export function calcStats(points) {
   let minAltIndex = null;
   let maxAltIndex = null;
   let maxSpeedIndex = null;
+  let maxAccelF = null;
+  let maxAccelIndex = null;
+  let minAccelF = null;
+  let minAccelIndex = null;
+  let maxLateral = null;
+  let maxLateralIndex = null;
   const speeds = [];
 
   for (let i = 1; i < points.length; i++) {
@@ -48,6 +54,13 @@ export function calcStats(points) {
     const segSpeed = dtS > 0 ? segDist / dtS : 0;
     speeds.push(segSpeed);
     if (segSpeed > maxSpeed) { maxSpeed = segSpeed; maxSpeedIndex = i; }
+
+    const m = cur.motion;
+    if (m && m.confidence > 0.5) {
+      if (maxAccelF === null || m.maxAccelF > maxAccelF) { maxAccelF = m.maxAccelF; maxAccelIndex = i; }
+      if (minAccelF === null || m.minAccelF < minAccelF) { minAccelF = m.minAccelF; minAccelIndex = i; }
+      if (maxLateral === null || m.maxLateralAbs > maxLateral) { maxLateral = m.maxLateralAbs; maxLateralIndex = i; }
+    }
   }
 
   const first = points[0];
@@ -67,6 +80,12 @@ export function calcStats(points) {
     minAltIndex,
     maxAltIndex,
     maxSpeedIndex,
+    maxAccelF,
+    maxAccelIndex,
+    minAccelF,
+    minAccelIndex,
+    maxLateral,
+    maxLateralIndex,
     pointCount: points.length,
     speeds,
   };
@@ -93,6 +112,11 @@ export function fmtDuration(s) {
 export function fmtAlt(m) {
   if (m == null) return 'n/a';
   return Math.round(m) + ' m';
+}
+
+export function fmtAccel(mps2) {
+  if (mps2 == null) return 'n/a';
+  return (mps2 / 9.81).toFixed(2) + ' g';
 }
 
 export function mpgColor(mpg, min, max) {

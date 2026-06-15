@@ -1,7 +1,8 @@
 import { MapManager } from './map/index.js';
 import { Tracker } from './tracker.js';
+import { MotionSensor } from './motion.js';
 import { Replay } from './replay.js';
-import { calcStats, fmtDistance, fmtSpeed, fmtDuration, fmtAlt, fmtTime, pointSpeedKmh, buildColoredSegments } from './stats.js';
+import { calcStats, fmtDistance, fmtSpeed, fmtDuration, fmtAlt, fmtAccel, fmtTime, pointSpeedKmh, buildColoredSegments } from './stats.js';
 import { saveRoute, getRoute, getAllRoutes, deleteRoute, getSetting, setSetting } from './storage.js';
 import { exportJSON, exportGist } from './export.js';
 import { parseFuelCSV, matchFuelToRoute, buildEfficiencySegments } from './fuel.js';
@@ -22,7 +23,7 @@ const state = {
   heightMultiplier: 1,
 };
 
-let mapMgr, tracker, replay, wakeLock, view3d;
+let mapMgr, tracker, replay, wakeLock, view3d, motionSensor;
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -183,6 +184,10 @@ function startTracking() {
 
   tracker = new Tracker({
     onPoint: (pt, points) => {
+      if (motionSensor) {
+        const summary = motionSensor.drainSummary(pt.deviceTimestamp);
+        if (summary) pt.motion = summary;
+      }
       mapMgr.updateUserLocation(pt.lat, pt.lng);
       mapMgr.drawTrack(points);
       renderLiveStats(points);
@@ -195,11 +200,21 @@ function startTracking() {
 
   tracker.start();
   acquireWakeLock();
+
+  motionSensor = new MotionSensor();
+  MotionSensor.requestPermission().then(granted => {
+    if (granted && state.tracking) motionSensor.start();
+  });
 }
 
 async function stopTracking() {
   const points = tracker ? tracker.stop() : [];
   state.tracking = false;
+
+  if (motionSensor) {
+    motionSensor.stop();
+    motionSensor = null;
+  }
 
   const fab = document.getElementById('fab');
   fab.textContent = '▶';
@@ -312,6 +327,21 @@ function renderStatsPanel() {
         <div class="stat-card-label">Max Alt</div>
         <div class="stat-card-val">${fmtAlt(stats.maxAlt)}</div>
       </div>
+      ${stats.maxAccelIndex != null ? `
+      <div class="stat-card stat-card-link" data-jump="${stats.maxAccelIndex}">
+        <div class="stat-card-label">Max Accel</div>
+        <div class="stat-card-val">${fmtAccel(stats.maxAccelF)}</div>
+      </div>` : ''}
+      ${stats.minAccelIndex != null ? `
+      <div class="stat-card stat-card-link" data-jump="${stats.minAccelIndex}">
+        <div class="stat-card-label">Max Braking</div>
+        <div class="stat-card-val">${fmtAccel(stats.minAccelF)}</div>
+      </div>` : ''}
+      ${stats.maxLateralIndex != null ? `
+      <div class="stat-card stat-card-link" data-jump="${stats.maxLateralIndex}">
+        <div class="stat-card-label">Max Cornering</div>
+        <div class="stat-card-val">${fmtAccel(stats.maxLateral)}</div>
+      </div>` : ''}
     </div>
 
     <div class="divider"></div>
@@ -412,6 +442,11 @@ function showPointDetails(seg, route) {
       <div class="stat-card"><div class="stat-card-label">Accuracy</div><div class="stat-card-val">${p.accuracy != null ? '±' + Math.round(p.accuracy) + 'm' : 'n/a'}</div></div>
       <div class="stat-card"><div class="stat-card-label">Heading</div><div class="stat-card-val">${p.heading != null ? Math.round(p.heading) + '°' : 'n/a'}</div></div>
       ${seg.chunkDistance != null ? `<div class="stat-card"><div class="stat-card-label">Min. Distance</div><div class="stat-card-val">${fmtDistance(seg.chunkDistance)}</div></div>` : ''}
+      ${p.motion ? `
+      <div class="stat-card"><div class="stat-card-label">Accel</div><div class="stat-card-val">${fmtAccel(p.motion.maxAccelF)}</div></div>
+      <div class="stat-card"><div class="stat-card-label">Braking</div><div class="stat-card-val">${fmtAccel(p.motion.minAccelF)}</div></div>
+      <div class="stat-card"><div class="stat-card-label">Cornering</div><div class="stat-card-val">${fmtAccel(p.motion.maxLateralAbs)}</div></div>
+      ` : ''}
     </div>
   `);
 }

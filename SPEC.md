@@ -16,6 +16,15 @@ interface GeoPoint {
   gpsTimestamp:     number;   // ms since epoch, from GeolocationPosition.timestamp
   deviceTimestamp:  number;   // ms since epoch, from Date.now() at point receipt
   speedLimitKmh?:   number | null;  // matched OSM maxspeed, km/h (see Speed Limits)
+  motion?:          MotionSummary;  // accelerometer summary since previous point (see Motion Capture)
+}
+
+interface MotionSummary {
+  maxAccelF:     number;  // peak forward (accelerating) accel, m/s^2
+  minAccelF:     number;  // peak rearward (braking) accel, m/s^2 (negative)
+  maxLateralAbs: number;  // peak |lateral| accel (cornering), m/s^2
+  sampleCount:   number;  // raw accelerometer samples in this window
+  confidence:    number;  // fraction of samples below the handling-rotation threshold, 0–1
 }
 ```
 
@@ -115,6 +124,34 @@ color = hsl(hue, 90%, 50%)
 
 Derived fields also computed per trip:
 - `litersUsed = (distanceMi / mpg) × 4.54609`
+
+## Motion Capture
+
+While tracking, `js/motion.js` (`MotionSensor`) listens to `devicemotion` events
+and produces a per-GPS-point summary of acceleration in vehicle-relative axes:
+
+- **Permission**: `DeviceMotionEvent.requestPermission()` is requested when
+  tracking starts (must follow a user gesture on iOS). If denied or
+  unsupported, points simply have no `motion` field.
+- **Gravity removal**: a low-pass filter (`GRAVITY_ALPHA = 0.85`) tracks the
+  gravity vector; `linear accel = raw - gravity`.
+- **Axis calibration**: the first sustained linear-acceleration burst
+  (magnitude > 1.5 m/s², 5 consecutive samples) defines the vehicle's forward
+  axis — its horizontal component (gravity component removed) is normalized
+  to `forward`; `right = down × forward`. This assumes the first burst is the
+  car pulling away, not the phone being handled.
+- **Handling filter**: each sample's `rotationRate` magnitude is checked
+  against `ROTATION_THRESHOLD = 15°/s`. Samples above this (phone being
+  picked up/moved) are marked low-confidence. A point's `motion.confidence`
+  is the fraction of confident samples in its window; `calcStats` ignores
+  points with `confidence <= 0.5` when computing accel/braking/cornering
+  extremes.
+- **Per-point summary**: between consecutive GPS points, all buffered
+  accelerometer samples are reduced to `maxAccelF` (hardest acceleration),
+  `minAccelF` (hardest braking), and `maxLateralAbs` (hardest cornering).
+- **Stats panel**: "Max Accel", "Max Braking", "Max Cornering" cards (shown
+  in g-force) jump to the corresponding point, same as Max Speed / Min/Max
+  Alt.
 
 ## Speed Limits
 
