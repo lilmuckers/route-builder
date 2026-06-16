@@ -4,7 +4,7 @@ import { MotionSensor } from './motion.js';
 import { Replay } from './replay.js';
 import { calcStats, fmtDistance, fmtSpeed, fmtDuration, fmtAlt, fmtAccel, fmtTime, pointSpeedKmh, buildColoredSegments } from './stats.js';
 import { saveRoute, getRoute, getAllRoutes, deleteRoute, getSetting, setSetting } from './storage.js';
-import { exportJSON, exportGist } from './export.js';
+import { exportJSON, exportGist, listPathTracerGists, fetchGistRoute } from './export.js';
 import { parseFuelCSV, matchFuelToRoute, buildEfficiencySegments } from './fuel.js';
 import { fetchSpeedLimits, matchSpeedLimits } from './speedlimits.js';
 import { View3D } from './view3d.js';
@@ -657,15 +657,90 @@ function openFuelImport(route) {
 
 // ─── Settings modal ───────────────────────────────────────────────────────────
 
+async function openGistImportModal(token) {
+  openModal('Import from Gist', '<p style="color:var(--text2);font-size:13px">Fetching your gists…</p>');
+
+  let gists;
+  try {
+    gists = await listPathTracerGists(token);
+  } catch (e) {
+    document.getElementById('modal-body').innerHTML = `<p style="color:var(--red)">${escHtml(e.message)}</p>`;
+    return;
+  }
+
+  if (!gists.length) {
+    document.getElementById('modal-body').innerHTML = '<p style="color:var(--text2);font-size:13px">No Path Tracer routes found in your gists.</p>';
+    return;
+  }
+
+  // Render list with loading placeholders, then populate stats in background
+  const rows = gists.map((g, i) => {
+    const date = new Date(g.updated_at).toLocaleDateString();
+    const name = g.description?.replace(/^Path Tracer route:\s*/, '') || Object.keys(g.files)[0];
+    return `
+      <div class="gist-import-row" id="gist-row-${i}">
+        <div class="gist-import-info">
+          <div class="gist-import-name">${escHtml(name)}</div>
+          <div class="gist-import-meta" id="gist-meta-${i}"><span style="color:var(--text2)">${date} · loading…</span></div>
+        </div>
+        <button class="btn btn-ghost btn-sm gist-import-btn" data-idx="${i}" disabled>Import</button>
+      </div>`;
+  }).join('');
+
+  document.getElementById('modal-body').innerHTML = `<div class="gist-import-list">${rows}</div>`;
+
+  const routeCache = {};
+
+  // Fetch content for each gist and populate stats
+  gists.forEach(async (g, i) => {
+    try {
+      const route = await fetchGistRoute(g, token);
+      routeCache[i] = route;
+      const stats = calcStats(route.points ?? []);
+      const meta = document.getElementById(`gist-meta-${i}`);
+      const date = new Date(g.updated_at).toLocaleDateString();
+      if (meta) meta.innerHTML = `<span style="color:var(--text2)">${date} · ${fmtDistance(stats.distance)} · ${fmtDuration(stats.duration)} · ${route.points?.length ?? 0} pts</span>`;
+      const btn = document.querySelector(`[data-idx="${i}"]`);
+      if (btn) btn.disabled = false;
+    } catch {
+      const meta = document.getElementById(`gist-meta-${i}`);
+      if (meta) meta.innerHTML = '<span style="color:var(--red)">failed to load</span>';
+    }
+  });
+
+  document.getElementById('modal-body').addEventListener('click', async e => {
+    const btn = e.target.closest('.gist-import-btn');
+    if (!btn || btn.disabled) return;
+    const idx = Number(btn.dataset.idx);
+    const route = routeCache[idx];
+    if (!route) return;
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      await saveRoute(route);
+      await loadRoutes();
+      closeModal();
+      toast(`Imported "${route.name}".`);
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = 'Import';
+      toast('Import failed: ' + err.message);
+    }
+  });
+}
+
 function setupSettingsModal() {
   document.getElementById('btn-settings').addEventListener('click', async () => {
     const token = await getSetting('githubToken') ?? '';
     openModal('Settings', `
       <div class="field">
-        <label>GitHub Token (for Gist export)</label>
+        <label>GitHub Token (for Gist export/import)</label>
         <input type="password" id="setting-gh-token" value="${escHtml(token)}" placeholder="ghp_…" autocomplete="off">
       </div>
-      <button class="btn btn-primary" id="btn-settings-save">Save</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="btn-settings-save">Save</button>
+        ${token ? '<button class="btn btn-ghost" id="btn-import-gist">⬇ Import from Gist</button>' : ''}
+      </div>
 
       <div class="divider"></div>
       <div class="section-title">App</div>
@@ -677,6 +752,11 @@ function setupSettingsModal() {
       await setSetting('githubToken', t);
       closeModal();
       toast('Settings saved.');
+    });
+
+    document.getElementById('btn-import-gist')?.addEventListener('click', () => {
+      closeModal();
+      openGistImportModal(token);
     });
 
     document.getElementById('btn-clear-cache').addEventListener('click', clearCacheAndReload);

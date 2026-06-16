@@ -345,6 +345,16 @@ html, body {
 .view-legend-bar { height: 6px; border-radius: 3px; }
 .view-legend-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text2); margin-top: 3px; }
 
+/* Gist import list */
+.gist-import-list { display: flex; flex-direction: column; gap: 10px; }
+.gist-import-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface2); border-radius: var(--radius); padding: 12px;
+}
+.gist-import-info { flex: 1; min-width: 0; }
+.gist-import-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gist-import-meta { font-size: 12px; margin-top: 3px; }
+
 /* Fuel section */
 .fuel-section {
   margin-bottom: 14px;

@@ -1,5 +1,38 @@
 import { getSetting } from './storage.js';
 
+const GIST_FILE_RE = /^path-tracer-route-.+\.json$/;
+
+export async function listPathTracerGists(token) {
+  const allGists = [];
+  let page = 1;
+  while (true) {
+    const res = await fetch(`https://api.github.com/gists?per_page=100&page=${page}`, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' },
+    });
+    if (!res.ok) throw new Error(`GitHub API error ${res.status}`);
+    const batch = await res.json();
+    if (!batch.length) break;
+    allGists.push(...batch);
+    if (batch.length < 100) break;
+    page++;
+  }
+
+  return allGists.filter(g =>
+    Object.keys(g.files).some(f => GIST_FILE_RE.test(f))
+  );
+}
+
+export async function fetchGistRoute(gist, token) {
+  const filename = Object.keys(gist.files).find(f => GIST_FILE_RE.test(f));
+  if (!filename) throw new Error('No route file in gist');
+  const rawUrl = gist.files[filename].raw_url;
+  const res = await fetch(rawUrl, {
+    headers: { Authorization: `token ${token}` },
+  });
+  if (!res.ok) throw new Error(`Fetch failed ${res.status}`);
+  return res.json();
+}
+
 export function exportJSON(route) {
   const json = JSON.stringify(route, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
