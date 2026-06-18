@@ -166,6 +166,24 @@ export function relativeSpeedColor(speedKmh, limitKmh) {
   return `hsl(${hue},85%,50%)`;
 }
 
+/**
+ * Blue (coasting, ~0) → green (max accel) or red (max braking).
+ * accelF positive = acceleration, negative = braking.
+ * maxAccelF and maxBrakeAbs are the route-level extremes for normalization.
+ */
+export function accelColor(accelF, maxAccelF, maxBrakeAbs) {
+  if (accelF == null) return 'hsl(0,0%,40%)';
+  if (accelF >= 0) {
+    const t = maxAccelF > 0 ? clamp(accelF / maxAccelF, 0, 1) : 0;
+    const hue = 220 - t * 100; // 220 (blue) → 120 (green)
+    return `hsl(${Math.round(hue)},85%,50%)`;
+  } else {
+    const t = maxBrakeAbs > 0 ? clamp(-accelF / maxBrakeAbs, 0, 1) : 0;
+    const hue = 220 + t * 140; // 220 (blue) → 360/0 (red)
+    return `hsl(${Math.round(hue) % 360},85%,50%)`;
+  }
+}
+
 /** Red (slow chunk, traffic) -> green (fast chunk). */
 export function paceColor(dist, minD, maxD) {
   const t = maxD === minD ? 0.5 : clamp((dist - minD) / (maxD - minD), 0, 1);
@@ -174,11 +192,41 @@ export function paceColor(dist, minD, maxD) {
 
 /**
  * Build per-segment {points:[a,b], color, point, speedKmh, chunkDistance?} for the
- * given colour mode: 'plain' | 'absolute' | 'relative' | 'pace'.
+ * given colour mode: 'plain' | 'absolute' | 'relative' | 'pace' | 'accel'.
  */
 export function buildColoredSegments(points, mode) {
   if (points.length < 2) return [];
   if (mode === 'pace') return buildPaceSegments(points);
+
+  if (mode === 'accel') {
+    // Compute route-level extremes for normalisation
+    let maxAccelF = 0;
+    let maxBrakeAbs = 0;
+    for (const p of points) {
+      if (!p.motion || p.motion.confidence <= 0.5) continue;
+      if (p.motion.maxAccelF > maxAccelF) maxAccelF = p.motion.maxAccelF;
+      if (-p.motion.minAccelF > maxBrakeAbs) maxBrakeAbs = -p.motion.minAccelF;
+    }
+    const segs = [];
+    for (let i = 1; i < points.length; i++) {
+      const p = points[i];
+      const speedKmh = pointSpeedKmh(points, i);
+      let representative = null;
+      if (p.motion && p.motion.confidence > 0.5) {
+        // dominant event in this window: whichever is more extreme
+        representative = Math.abs(p.motion.minAccelF) > p.motion.maxAccelF
+          ? p.motion.minAccelF
+          : p.motion.maxAccelF;
+      }
+      segs.push({
+        points: [points[i - 1], points[i]],
+        color: accelColor(representative, maxAccelF, maxBrakeAbs),
+        point: p,
+        speedKmh,
+      });
+    }
+    return segs;
+  }
 
   const speeds = points.map((_, i) => pointSpeedKmh(points, i));
   const minS = Math.min(...speeds);

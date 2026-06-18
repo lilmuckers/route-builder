@@ -356,6 +356,7 @@ function renderStatsPanel() {
         ['absolute', 'Speed'],
         ['relative', 'vs Limit'],
         ['pace', 'Traffic'],
+        ['accel', 'Accel'],
       ].map(([key, label]) => `<button class="view-btn${state.mapView === key ? ' active' : ''}" data-view="${key}">${label}</button>`).join('')}
     </div>
     ${renderViewLegend(state.mapView)}
@@ -406,6 +407,7 @@ function renderViewLegend(mode) {
     absolute: { stops: ['hsl(240,85%,50%)', 'hsl(0,85%,50%)'], left: 'Slow', right: 'Fast' },
     relative: { stops: ['hsl(240,85%,50%)', 'hsl(120,85%,50%)', 'hsl(0,85%,50%)'], left: 'Under limit', right: 'Over limit' },
     pace: { stops: ['hsl(0,85%,50%)', 'hsl(120,85%,50%)'], left: 'Slow (traffic)', right: 'Fast' },
+    accel: { stops: ['hsl(0,85%,50%)', 'hsl(220,85%,50%)', 'hsl(120,85%,50%)'], left: 'Braking', right: 'Accelerating' },
   };
   const bar = bars[mode];
   if (!bar) return '';
@@ -520,6 +522,9 @@ function setupStatsActions(route, stats) {
       state.mapView = btn.dataset.view;
       if (state.mapView === 'relative' && !route.points.some(p => p.speedLimitKmh != null)) {
         toast('Fetch speed limits to use this view.');
+      }
+      if (state.mapView === 'accel' && !route.points.some(p => p.motion)) {
+        toast('No accelerometer data — record a new route with motion sensors.');
       }
       renderStatsPanel();
       renderMapView(route);
