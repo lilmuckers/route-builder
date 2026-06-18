@@ -21,6 +21,7 @@ const state = {
   mapView: 'plain', // 'plain' | 'absolute' | 'relative' | 'pace'
   viewMode: '2d', // '2d' | '3d'
   heightMultiplier: 1,
+  showUncertainty: false,
 };
 
 let mapMgr, tracker, replay, wakeLock, view3d, motionSensor;
@@ -123,12 +124,14 @@ function renderMapView(route) {
   }
   mapMgr.clearTrack('track');
   mapMgr.clearTrack('track-colored');
+  mapMgr.clearTrack('uncertainty');
   if (state.mapView === 'plain') {
     mapMgr.drawTrack(route.points, 'track');
   } else {
     const segments = buildColoredSegments(route.points, state.mapView);
     mapMgr.drawColoredSegments(segments, 'track-colored', seg => showPointDetails(seg, route));
   }
+  if (state.showUncertainty) mapMgr.drawUncertaintyCorridor(route.points);
 }
 
 function enter3D(route) {
@@ -144,6 +147,7 @@ function enter3D(route) {
   const colorMode = state.mapView === 'plain' ? 'absolute' : state.mapView;
   const segments = buildColoredSegments(route.points, colorMode);
   view3d.heightMultiplier = state.heightMultiplier;
+  view3d.showUncertainty = state.showUncertainty;
   view3d.setRoute(segments, route.points);
 }
 
@@ -349,6 +353,7 @@ function renderStatsPanel() {
     <div class="view-btns">
       <button class="view-btn view2d3d-btn${state.viewMode === '2d' ? ' active' : ''}" data-vm="2d">🗺 2D Map</button>
       <button class="view-btn view2d3d-btn${state.viewMode === '3d' ? ' active' : ''}" data-vm="3d">⛰ 3D Terrain</button>
+      <button class="view-btn uncertainty-toggle-btn${state.showUncertainty ? ' active' : ''}" id="btn-uncertainty">±GPS</button>
     </div>
     <div class="view-btns">
       ${[
@@ -529,6 +534,18 @@ function setupStatsActions(route, stats) {
       renderStatsPanel();
       renderMapView(route);
     });
+  });
+
+  document.getElementById('btn-uncertainty')?.addEventListener('click', () => {
+    state.showUncertainty = !state.showUncertainty;
+    document.getElementById('btn-uncertainty')?.classList.toggle('active', state.showUncertainty);
+    if (state.viewMode === '2d') {
+      mapMgr.clearTrack('uncertainty');
+      if (state.showUncertainty) mapMgr.drawUncertaintyCorridor(route.points);
+    } else if (view3d) {
+      view3d.showUncertainty = state.showUncertainty;
+      view3d.setHeightMultiplier(state.heightMultiplier);
+    }
   });
 
   document.querySelectorAll('.view2d3d-btn').forEach(btn => {

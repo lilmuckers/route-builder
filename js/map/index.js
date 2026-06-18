@@ -64,6 +64,22 @@ export class MapManager {
     return layers;
   }
 
+  drawUncertaintyCorridor(points, id = 'uncertainty') {
+    this.clearTrack(id);
+    if (!points.length) return;
+    const layers = points
+      .filter(p => p.accuracy != null && p.accuracy > 0)
+      .map(p => this.provider.addCircle(p.lat, p.lng, p.accuracy, {
+        color: '#60a5fa', fillColor: '#60a5fa',
+      }));
+    this._layers.set(id, layers);
+  }
+
+  drawAltUncertaintyCorridor(points, id = 'alt-uncertainty') {
+    // placeholder — altitude uncertainty lives in the 3D view; nothing to draw in 2D
+    void id; void points;
+  }
+
   drawFuelSegments(segments) {
     this._fuelLayers.forEach(l => this.provider.removeLayer(l));
     this._fuelLayers = [];

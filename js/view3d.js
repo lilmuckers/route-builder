@@ -4,6 +4,7 @@ export class View3D {
   constructor(containerId) {
     this.container = document.getElementById(containerId);
     this.heightMultiplier = 1;
+    this.showUncertainty = false;
     this._points = null;
     this._segments = null;
     this._routeGroup = null;
@@ -116,6 +117,67 @@ export class View3D {
     const grid = new THREE.GridHelper(size * 1.4, 20, 0x334155, 0x1e293b);
     grid.position.set(centerX, 0, centerZ);
     group.add(grid);
+
+    if (this.showUncertainty) {
+      // Altitude uncertainty: semi-transparent vertical quads around each segment
+      const uPositions = [];
+      const uColors = [];
+      const uIndices = [];
+      const uColor = new THREE.Color(0x60a5fa);
+      let vi = 0;
+
+      for (const seg of this._segments) {
+        const p0 = seg.points[0], p1 = seg.points[1];
+        const altAcc0 = (p0.altitudeAccuracy ?? 0) * this.heightMultiplier;
+        const altAcc1 = (p1.altitudeAccuracy ?? 0) * this.heightMultiplier;
+        const a = this._toXYZ(p0, lat0, lng0, minAlt);
+        const b = this._toXYZ(p1, lat0, lng0, minAlt);
+
+        // 4 corners: bottom-a, top-a, top-b, bottom-b
+        uPositions.push(
+          a.x, a.y - altAcc0, a.z,
+          a.x, a.y + altAcc0, a.z,
+          b.x, b.y + altAcc1, b.z,
+          b.x, b.y - altAcc1, b.z,
+        );
+        for (let c = 0; c < 4; c++) uColors.push(uColor.r, uColor.g, uColor.b);
+        uIndices.push(vi, vi+1, vi+2, vi, vi+2, vi+3);
+        vi += 4;
+
+        // Horizontal GPS accuracy: flat ground-level quads perpendicular to track
+        const acc0 = (p0.accuracy ?? 0);
+        const acc1 = (p1.accuracy ?? 0);
+        if (acc0 > 0 || acc1 > 0) {
+          const dx = b.x - a.x, dz = b.z - a.z;
+          const len = Math.hypot(dx, dz) || 1;
+          const px = -dz / len, pz = dx / len; // perpendicular in xz plane
+          uPositions.push(
+            a.x + px * acc0, a.y, a.z + pz * acc0,
+            a.x - px * acc0, a.y, a.z - pz * acc0,
+            b.x - px * acc1, b.y, b.z - pz * acc1,
+            b.x + px * acc1, b.y, b.z + pz * acc1,
+          );
+          for (let c = 0; c < 4; c++) uColors.push(uColor.r, uColor.g, uColor.b);
+          uIndices.push(vi, vi+1, vi+2, vi, vi+2, vi+3);
+          vi += 4;
+        }
+      }
+
+      if (uPositions.length) {
+        const uGeom = new THREE.BufferGeometry();
+        uGeom.setAttribute('position', new THREE.Float32BufferAttribute(uPositions, 3));
+        uGeom.setAttribute('color', new THREE.Float32BufferAttribute(uColors, 3));
+        uGeom.setIndex(uIndices);
+        const uMat = new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.22,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        group.add(new THREE.Mesh(uGeom, uMat));
+      }
+    }
 
     this.scene.add(group);
     this._routeGroup = group;

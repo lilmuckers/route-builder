@@ -56,6 +56,18 @@ export class LeafletProvider {
     }
   }
 
+  addCircle(lat, lng, radiusM, opts = {}) {
+    return L.circle([lat, lng], {
+      radius: radiusM,
+      color: opts.color ?? '#3b82f6',
+      fillColor: opts.fillColor ?? '#3b82f6',
+      fillOpacity: opts.fillOpacity ?? 0.12,
+      opacity: opts.opacity ?? 0.25,
+      weight: opts.weight ?? 1,
+      interactive: false,
+    }).addTo(this.map);
+  }
+
   addPolyline(points, opts = {}) {
     const latlngs = points.map(p => [p.lat, p.lng]);
     return L.polyline(latlngs, {

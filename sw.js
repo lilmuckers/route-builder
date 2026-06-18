@@ -1,4 +1,4 @@
-const CACHE = 'path-tracer-v7';
+const CACHE = 'path-tracer-v8';
 const PRECACHE = [
   '/',
   '/index.html',
